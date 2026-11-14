@@ -1,0 +1,81 @@
+sequenceDiagram
+    autonumber
+    actor Librarian as Библиотекарь
+    participant LC as LoanController (Presentation)
+    participant LPS as LoanProcessingService (Application)
+    participant RR as IReaderRepository (Domain Interface)
+    participant BR as IBookRepository (Domain Interface)
+    participant LR as IBookLoanRepository (Domain Interface)
+    participant B as book: Book (Domain Entity)
+    participant BL as loan: BookLoan (Domain Entity)
+    participant TX as IDatabaseTransactionManager (Infrastructure)
+    participant SBR as SqlBookRepository (DAL)
+    participant SLR as SqlBookLoanRepository (DAL)
+
+    Librarian ->> LC: POST /loans {readerId, bookId, loanDurationDays}
+    activate LC
+    LC ->> LC: validate(request)
+    LC ->> LPS: issueBook(IssueBookDTO)
+    activate LPS
+
+    LPS ->> RR: findById(readerId)
+    activate RR
+    RR -->> LPS: reader
+    deactivate RR
+
+    LPS ->> BR: findById(bookId)
+    activate BR
+    BR -->> LPS: book
+    deactivate BR
+
+    LPS ->> B: isAvailable()
+    activate B
+    B -->> LPS: bool (availableCopies > 0)
+    deactivate B
+
+    alt Доступных экземпляров НЕТ (availableCopies <= 0)
+        LPS -->> LC: throw BookNotAvailableException("Книга недоступна для выдачи")
+        LC -->> Librarian: HTTP 409 Conflict / Error JSON
+    else Экземпляр ДОСТУПЕН (availableCopies > 0)
+        LPS ->> TX: beginTransaction()
+        activate TX
+
+        LPS ->> B: decrementAvailableCopies()
+        activate B
+        Note over B: availableCopies = availableCopies - 1
+        B -->> LPS: void
+        deactivate B
+
+        LPS ->> BR: update(book)
+        activate BR
+        BR ->> SBR: update(book)
+        activate SBR
+        Note over SBR: UPDATE books SET available_copies = ... WHERE id = ...
+        SBR -->> BR: success
+        deactivate SBR
+        BR -->> LPS: void
+        deactivate BR
+
+        LPS ->> BL: create(book, reader, issueDate, dueDate, status=ACTIVE)
+        activate BL
+        BL -->> LPS: loan
+        deactivate BL
+
+        LPS ->> LR: save(loan)
+        activate LR
+        LR ->> SLR: save(loan)
+        activate SLR
+        Note over SLR: INSERT INTO book_loans (...) VALUES (...)
+        SLR -->> LR: savedLoan
+        deactivate SLR
+        LR -->> LPS: savedLoan
+        deactivate LR
+
+        LPS ->> TX: commit()
+        deactivate TX
+
+        LPS -->> LC: LoanResponseDTO
+        deactivate LPS
+        LC -->> Librarian: HTTP 201 Created (LoanResponseDTO JSON)
+        deactivate LC
+    end

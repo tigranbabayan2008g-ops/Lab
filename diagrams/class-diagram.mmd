@@ -1,18 +1,28 @@
 classDiagram
     direction TB
 
-    %% 1. Presentation Layer
+    %% Перечисления
+    class LoanStatus {
+        <<enumeration>>
+        ACTIVE
+        RETURNED
+        OVERDUE
+    }
+
+    %% ==========================================
+    %% 1. PRESENTATION LAYER (Слой представления)
+    %% ==========================================
     class BookController {
         -BookService bookService
         +addBook(request)
         +searchBooks(request)
-        +checkAvailability(bookId)
+        +checkAvailability(int bookId)
     }
 
     class ReaderController {
         -ReaderService readerService
         +registerReader(request)
-        +getReaderBooks(readerId)
+        +getReaderLoans(int readerId)
     }
 
     class LoanController {
@@ -23,33 +33,37 @@ classDiagram
         +getLoanHistory()
     }
 
-    %% 2. Application Layer
+    %% ==========================================
+    %% 2. APPLICATION LAYER (Слой приложения)
+    %% ==========================================
     class BookService {
         -IBookRepository bookRepo
         -IAuthorRepository authorRepo
         +addBook(title, authorId, year, genre, isbn, totalCopies) Book
         +searchBooks(query) List~Book~
-        +checkAvailability(bookId) bool
+        +checkAvailability(int bookId) bool
     }
 
     class ReaderService {
         -IReaderRepository readerRepo
         -IBookLoanRepository loanRepo
         +registerReader(fullName, cardNumber, phone, email) Reader
-        +getReaderActiveLoans(readerId) List~BookLoan~
+        +getReaderActiveLoans(int readerId) List~BookLoan~
     }
 
     class LoanService {
         -IBookLoanRepository loanRepo
         -IBookRepository bookRepo
         -IReaderRepository readerRepo
-        +issueBook(bookId, readerId, days) BookLoan
-        +returnBook(loanId) BookLoan
+        +issueBook(int bookId, int readerId, int days) BookLoan
+        +returnBook(int loanId) BookLoan
         +getOverdueLoans() List~BookLoan~
         +getLoanHistory() List~BookLoan~
     }
 
-    %% 3. Business Layer (Domain)
+    %% ==========================================
+    %% 3. BUSINESS LAYER (Бизнес-слой / Сущности)
+    %% ==========================================
     class Book {
         +int id
         +string title
@@ -87,11 +101,12 @@ classDiagram
         +string issueDate
         +string dueDate
         +string returnDate
-        +string status
-        +closeLoan(returnDate) void
-        +checkIsOverdue() bool
+        +LoanStatus status
+        +closeLoan(string returnDate) void
+        +checkIsOverdue(string currentDate) bool
     }
 
+    %% Контракты репозиториев (Интерфейсы)
     class IBookRepository {
         <<interface>>
         +save(Book book) void
@@ -123,11 +138,13 @@ classDiagram
         +findAll() List~BookLoan~
     }
 
-    %% 4. Data Access Layer (DAL)
+    %% ==========================================
+    %% 4. DATA ACCESS LAYER (Слой доступа к БД)
+    %% ==========================================
     class DatabaseConnection {
-        -string connectionString
-        +query(sql, params)
-        +execute(sql, params)
+        -string dsn
+        +query(string sql, array params)
+        +execute(string sql, array params)
     }
 
     class SqlBookRepository {
@@ -161,7 +178,7 @@ classDiagram
         +findAll() List~BookLoan~
     }
 
-    %% Links
+    %% Связи между компонентами
     BookController --> BookService
     ReaderController --> ReaderService
     LoanController --> LoanService
@@ -174,9 +191,10 @@ classDiagram
     LoanService ..> IBookRepository
     LoanService ..> IReaderRepository
 
-    Book "0..*" o-- "1" Author
-    BookLoan "0..*" --> "1" Book
-    BookLoan "0..*" --> "1" Reader
+    Book "0..*" o-- "1" Author : написана
+    BookLoan "0..*" --> "1" Book : выдаваемая книга
+    BookLoan "0..*" --> "1" Reader : читатель
+    BookLoan --> LoanStatus
 
     SqlBookRepository ..|> IBookRepository
     SqlAuthorRepository ..|> IAuthorRepository

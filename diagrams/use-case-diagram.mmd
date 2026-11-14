@@ -1,0 +1,37 @@
+flowchart LR
+    %% Акторы
+    Reader["fa:fa-user Читатель"]
+    Librarian["fa:fa-user-tie Библиотекарь"]
+
+    %% Граница системы
+    subgraph System ["Информационная система «Библиотека»"]
+        UC_Search(["1. Поиск книги в каталоге"])
+        UC_CheckAvail(["2. Проверка доступности книги"])
+        UC_MyLoans(["3. Получение списка книг читателя"])
+        UC_RegReader(["4. Регистрация читателя"])
+        UC_AddBook(["5. Добавление книги в фонд"])
+        UC_Issue(["6. Выдача книги"])
+        UC_VerifyStock(["Проверка наличия свободного экземпляра"])
+        UC_Return(["7. Возврат книги"])
+        UC_RestoreStock(["Восстановление доступного количества"])
+        UC_Overdue(["8. Получение списка просроченных книг"])
+        UC_History(["9. Получение истории выдач"])
+    end
+
+    %% Связи акторов с прецедентами
+    Reader --> UC_Search
+    Reader --> UC_CheckAvail
+    Reader --> UC_MyLoans
+
+    Librarian --> UC_RegReader
+    Librarian --> UC_AddBook
+    Librarian --> UC_Issue
+    Librarian --> UC_Return
+    Librarian --> UC_Overdue
+    Librarian --> UC_History
+    Librarian --> UC_Search
+    Librarian --> UC_CheckAvail
+
+    %% Отношения include
+    UC_Issue -.->|include| UC_VerifyStock
+    UC_Return -.->|include| UC_RestoreStock

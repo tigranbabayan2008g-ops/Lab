@@ -1,253 +1,189 @@
 classDiagram
     direction TB
 
-    %% Presentation Layer
+    %% 1. Presentation Layer
     class BookController {
-        -BookCatalogService bookCatalogService
-        +addBook(Request request) JsonResponse
-        +searchBooks(Request request) JsonResponse
-        +checkAvailability(int bookId) JsonResponse
+        -BookService bookService
+        +addBook(request)
+        +searchBooks(request)
+        +checkAvailability(bookId)
     }
 
     class ReaderController {
-        -ReaderManagementService readerService
-        +registerReader(Request request) JsonResponse
-        +getReaderLoans(int readerId) JsonResponse
+        -ReaderService readerService
+        +registerReader(request)
+        +getReaderBooks(readerId)
     }
 
     class LoanController {
-        -LoanProcessingService loanService
-        +issueBook(Request request) JsonResponse
-        +returnBook(Request request) JsonResponse
-        +getOverdueLoans() JsonResponse
-        +getLoanHistory(Request request) JsonResponse
+        -LoanService loanService
+        +issueBook(request)
+        +returnBook(request)
+        +getOverdueLoans()
+        +getLoanHistory()
     }
 
-    %% Application Layer
-    class BookCatalogService {
+    %% 2. Application Layer
+    class BookService {
         -IBookRepository bookRepo
         -IAuthorRepository authorRepo
-        +addBook(CreateBookDTO dto) BookResponseDTO
-        +searchBooks(BookSearchFilterDTO filter) List~BookResponseDTO~
-        +checkAvailability(int bookId) bool
+        +addBook(title, authorId, year, genre, isbn, totalCopies) Book
+        +searchBooks(query) List~Book~
+        +checkAvailability(bookId) bool
     }
 
-    class ReaderManagementService {
+    class ReaderService {
         -IReaderRepository readerRepo
         -IBookLoanRepository loanRepo
-        +registerReader(RegisterReaderDTO dto) ReaderResponseDTO
-        +getReaderActiveLoans(int readerId) List~LoanResponseDTO~
+        +registerReader(fullName, cardNumber, phone, email) Reader
+        +getReaderActiveLoans(readerId) List~BookLoan~
     }
 
-    class LoanProcessingService {
+    class LoanService {
         -IBookLoanRepository loanRepo
         -IBookRepository bookRepo
         -IReaderRepository readerRepo
-        -IDatabaseTransactionManager txManager
-        +issueBook(IssueBookDTO dto) LoanResponseDTO
-        +returnBook(ReturnBookDTO dto) LoanResponseDTO
-        +getOverdueLoans() List~LoanResponseDTO~
-        +getLoanHistory(LoanHistoryFilterDTO filter) List~LoanResponseDTO~
+        +issueBook(bookId, readerId, days) BookLoan
+        +returnBook(loanId) BookLoan
+        +getOverdueLoans() List~BookLoan~
+        +getLoanHistory() List~BookLoan~
     }
 
-    class IssueBookDTO {
-        +int bookId
-        +int readerId
-        +int loanDurationDays
-    }
-
-    class ReturnBookDTO {
-        +int loanId
-        +DateTime returnDate
-    }
-
-    class CreateBookDTO {
+    %% 3. Business Layer (Domain)
+    class Book {
+        +int id
         +string title
-        +int authorId
+        +Author author
         +int publicationYear
         +string genre
         +string isbn
         +int totalCopies
+        +int availableCopies
+        +isAvailable() bool
+        +decreaseAvailableCopies() void
+        +increaseAvailableCopies() void
     }
 
-    class RegisterReaderDTO {
+    class Author {
+        +int id
+        +string fullName
+        +string country
+        +string birthDate
+        +string bio
+    }
+
+    class Reader {
+        +int id
         +string fullName
         +string libraryCardNumber
         +string phone
         +string email
     }
 
-    %% Business Layer
-    class Book {
-        -int id
-        -string title
-        -Author author
-        -int publicationYear
-        -string genre
-        -string isbn
-        -int totalCopies
-        -int availableCopies
-        +isAvailable() bool
-        +decrementAvailableCopies() void
-        +incrementAvailableCopies() void
-        +getId() int
-        +getTitle() string
-        +getAvailableCopies() int
-        +getTotalCopies() int
-    }
-
-    class Author {
-        -int id
-        -string fullName
-        -string country
-        -DateTime birthDate
-        -string bio
-        +getId() int
-        +getFullName() string
-    }
-
-    class Reader {
-        -int id
-        -string fullName
-        -string libraryCardNumber
-        -string phone
-        -string email
-        +getId() int
-        +getLibraryCardNumber() string
-        +canBorrow() bool
-    }
-
     class BookLoan {
-        -int id
-        -Book book
-        -Reader reader
-        -DateTime issueDate
-        -DateTime dueDate
-        -DateTime returnDate
-        -LoanStatus status
-        +close(DateTime actualReturnDate) void
-        +isOverdue(DateTime currentDate) bool
-        +getId() int
-        +getStatus() LoanStatus
-        +getDueDate() DateTime
-    }
-
-    class LoanStatus {
-        <<enumeration>>
-        ACTIVE
-        RETURNED
-        OVERDUE
+        +int id
+        +Book book
+        +Reader reader
+        +string issueDate
+        +string dueDate
+        +string returnDate
+        +string status
+        +closeLoan(returnDate) void
+        +checkIsOverdue() bool
     }
 
     class IBookRepository {
         <<interface>>
-        +save(Book book) Book
+        +save(Book book) void
         +findById(int id) Book
         +findByIsbn(string isbn) Book
-        +findByCriteria(BookSearchFilterDTO filter) List~Book~
+        +search(string query) List~Book~
         +update(Book book) void
     }
 
     class IAuthorRepository {
         <<interface>>
-        +save(Author author) Author
+        +save(Author author) void
         +findById(int id) Author
     }
 
     class IReaderRepository {
         <<interface>>
-        +save(Reader reader) Reader
+        +save(Reader reader) void
         +findById(int id) Reader
-        +findByCardNumber(string cardNumber) Reader
     }
 
     class IBookLoanRepository {
         <<interface>>
-        +save(BookLoan loan) BookLoan
+        +save(BookLoan loan) void
         +findById(int id) BookLoan
         +update(BookLoan loan) void
-        +findActiveByReaderId(int readerId) List~BookLoan~
-        +findOverdueLoans(DateTime currentDate) List~BookLoan~
-        +findAll(LoanHistoryFilterDTO filter) List~BookLoan~
+        +findByReaderId(int readerId) List~BookLoan~
+        +findOverdue() List~BookLoan~
+        +findAll() List~BookLoan~
     }
 
-    class IDatabaseTransactionManager {
-        <<interface>>
-        +beginTransaction() void
-        +commit() void
-        +rollback() void
-    }
-
-    %% Data Access Layer
-    class DatabaseContext {
-        -Connection connection
-        +execute(string sql, array params) Result
-        +beginTransaction() void
-        +commit() void
-        +rollback() void
+    %% 4. Data Access Layer (DAL)
+    class DatabaseConnection {
+        -string connectionString
+        +query(sql, params)
+        +execute(sql, params)
     }
 
     class SqlBookRepository {
-        -DatabaseContext db
-        +save(Book book) Book
+        -DatabaseConnection db
+        +save(Book book) void
         +findById(int id) Book
         +findByIsbn(string isbn) Book
-        +findByCriteria(BookSearchFilterDTO filter) List~Book~
+        +search(string query) List~Book~
         +update(Book book) void
     }
 
     class SqlAuthorRepository {
-        -DatabaseContext db
-        +save(Author author) Author
+        -DatabaseConnection db
+        +save(Author author) void
         +findById(int id) Author
     }
 
     class SqlReaderRepository {
-        -DatabaseContext db
-        +save(Reader reader) Reader
+        -DatabaseConnection db
+        +save(Reader reader) void
         +findById(int id) Reader
-        +findByCardNumber(string cardNumber) Reader
     }
 
     class SqlBookLoanRepository {
-        -DatabaseContext db
-        +save(BookLoan loan) BookLoan
+        -DatabaseConnection db
+        +save(BookLoan loan) void
         +findById(int id) BookLoan
         +update(BookLoan loan) void
-        +findActiveByReaderId(int readerId) List~BookLoan~
-        +findOverdueLoans(DateTime currentDate) List~BookLoan~
-        +findAll(LoanHistoryFilterDTO filter) List~BookLoan~
+        +findByReaderId(int readerId) List~BookLoan~
+        +findOverdue() List~BookLoan~
+        +findAll() List~BookLoan~
     }
 
-    %% Dependencies
-    BookController --> BookCatalogService
-    ReaderController --> ReaderManagementService
-    LoanController --> LoanProcessingService
+    %% Links
+    BookController --> BookService
+    ReaderController --> ReaderService
+    LoanController --> LoanService
 
-    BookCatalogService ..> IBookRepository
-    BookCatalogService ..> IAuthorRepository
-    ReaderManagementService ..> IReaderRepository
-    ReaderManagementService ..> IBookLoanRepository
-    LoanProcessingService ..> IBookLoanRepository
-    LoanProcessingService ..> IBookRepository
-    LoanProcessingService ..> IReaderRepository
-    LoanProcessingService ..> IDatabaseTransactionManager
-
-    LoanProcessingService ..> IssueBookDTO
-    LoanProcessingService ..> ReturnBookDTO
+    BookService ..> IBookRepository
+    BookService ..> IAuthorRepository
+    ReaderService ..> IReaderRepository
+    ReaderService ..> IBookLoanRepository
+    LoanService ..> IBookLoanRepository
+    LoanService ..> IBookRepository
+    LoanService ..> IReaderRepository
 
     Book "0..*" o-- "1" Author
     BookLoan "0..*" --> "1" Book
     BookLoan "0..*" --> "1" Reader
-    BookLoan --> LoanStatus
 
     SqlBookRepository ..|> IBookRepository
     SqlAuthorRepository ..|> IAuthorRepository
     SqlReaderRepository ..|> IReaderRepository
     SqlBookLoanRepository ..|> IBookLoanRepository
-    DatabaseContext ..|> IDatabaseTransactionManager
 
-    SqlBookRepository --> DatabaseContext
-    SqlAuthorRepository --> DatabaseContext
-    SqlReaderRepository --> DatabaseContext
-    SqlBookLoanRepository --> DatabaseContext
+    SqlBookRepository --> DatabaseConnection
+    SqlAuthorRepository --> DatabaseConnection
+    SqlReaderRepository --> DatabaseConnection
+    SqlBookLoanRepository --> DatabaseConnection

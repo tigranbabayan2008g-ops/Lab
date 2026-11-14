@@ -1,436 +1,350 @@
-# Веб-приложение «Библиотечная система» (Вариант 4)
+# Лабораторная работа: Библиотечная система (Вариант 4)
 
-Архитектурное проектирование информационной системы библиотеки в соответствии с принципами многоуровневой архитектуры (**Layered Architecture**), принципами **SOLID** и стандартами моделирования **UML 2.5**.
-
----
-
-## 1. Описание предметной области и цели системы
-
-Информационная система предназначена для автоматизации ключевых бизнес-процессов современной библиотеки:
-- Ведение электронного каталога изданий и информации об авторах.
-- Учёт номерного фонда читательских билетов и контактных данных читателей.
-- Контроль наличия физических экземпляров книг (общее и доступное количество).
-- Регистрация выдачи книг с проверкой доступности свободного экземпляра.
-- Фиксация возврата книг с автоматическим восстановлением баланса доступных экземпляров.
-- Мониторинг просроченных задолженностей и хранение сквозной истории выдач.
+**Тема:** Архитектурное проектирование веб-приложения на основе многоуровневой архитектуры (Layered Architecture).  
+**Выполнил:** студент Бабаян Тигран  
+**Вариант:** 4 (Информационная система библиотеки)
 
 ---
 
-## 2. Архитектурный стиль (Layered Architecture)
-
-Система строго разделена на 4 независимых слоя с нисходящим потоком управления и инверсией зависимостей (**Dependency Inversion Principle**, SOLID: DIP):
-
-```
-+-------------------------------------------------------------+
-|                     Presentation Layer                      |
-|      (Controllers, Web Routes, Request Validation, Views)   |
-+-------------------------------------------------------------+
-                              |
-                              v
-+-------------------------------------------------------------+
-|                      Application Layer                      |
-|       (Application Services, Use Cases, Orchestration, DTO) |
-+-------------------------------------------------------------+
-                              |
-                              v
-+-------------------------------------------------------------+
-|                       Business Layer                        |
-|   (Domain Entities, Invariants, Repository Interfaces, Enums)|
-+-------------------------------------------------------------+
-                              ^
-                              | (implements interfaces)
-+-------------------------------------------------------------+
-|                     Data Access Layer                       |
-|   (SQL Repositories, PDO/Connection Context, Transactions)  |
-+-------------------------------------------------------------+
-```
-
-### Принципы изоляции слоев:
-1. **Presentation Layer**: Не содержит бизнес-правил и прямых запросов к БД. Отвечает только за протокол взаимодействия (HTTP/REST), сериализацию и валидацию формата данных.
-2. **Application Layer**: Не выполняет SQL-запросов напрямую. Координирует выполнение сценариев, управляет транзакциями через интерфейс менеджера транзакций и вызывает методы бизнес-сущностей.
-3. **Business (Domain) Layer**: Ядро системы. Содержит сущности (`Book`, `Author`, `Reader`, `BookLoan`) и контракты репозиториев (`IBookRepository` и др.). Не имеет внешних зависимостей.
-4. **Data Access Layer (DAL)**: **Единственный слой, в котором разрешены SQL-запросы и взаимодействие с СУБД**. Реализует контракты репозиториев из Business Layer.
+## 1. Цель работы
+Спроектировать архитектуру информационной системы «Библиотека» в соответствии с шаблоном Layered Architecture (4 слоя) без реализации кода, используя язык моделирования UML и диаграммы Mermaid.js.
 
 ---
 
-## 3. Сущности и атрибутивный состав
+## 2. Описание предметной области
+Система предназначена для автоматизации работы библиотеки:
+- ведение каталога книг и авторов;
+- учет читателей и номеров читательских билетов;
+- отслеживание общего и доступного количества экземпляров каждой книги;
+- выдача книг читателям с проверкой, есть ли свободные экземпляры;
+- возврат книг с увеличением количества доступных копий;
+- отслеживание истории выдач и поиск просроченных книг.
 
-| Сущность | Атрибуты | Описание и инварианты |
+---
+
+## 3. Архитектура приложения (4 слоя)
+
+В соответствии с заданием архитектура разделена на 4 слоя:
+
+1. **Presentation Layer (Слой представления):**
+   - Контроллеры (`BookController`, `ReaderController`, `LoanController`).
+   - Принимают HTTP-запросы от пользователя/библиотекаря, проверяют входные данные и возвращают ответ (JSON / представление). Не содержат бизнес-логики и SQL-запросов.
+
+2. **Application Layer (Слой приложения / Сервисы):**
+   - Сервисы (`BookService`, `ReaderService`, `LoanService`).
+   - Отвечают за логику сценариев приложения: вызывают нужные сущности, проверяют условия (например, доступность книги), обращаются к интерфейсам репозиториев.
+
+3. **Business Layer (Бизнес-слой / Домен):**
+   - Основные сущности системы: `Book`, `Author`, `Reader`, `BookLoan`, статус `LoanStatus`.
+   - Содержат поля и методы для изменения своего состояния (например, `decreaseAvailableCopies()`, `isAvailable()`).
+   - Содержит интерфейсы репозиториев (`IBookRepository` и др.), чтобы слой приложения не зависел от базы данных напрямую.
+
+4. **Data Access Layer (DAL, Слой доступа к данным):**
+   - Классы `SqlBookRepository`, `SqlReaderRepository`, `SqlBookLoanRepository`, `SqlAuthorRepository` и `DatabaseConnection`.
+   - **Вся работа с базой данных и SQL-запросы находятся строго в этом слое**. Репозитории реализуют интерфейсы из бизнес-слоя.
+
+### Таблица распределения компонентов по слоям
+
+| Слой | Классы | Обязанности |
 | :--- | :--- | :--- |
-| **`Book`** | `id: int`<br>`title: string`<br>`author: Author`<br>`publicationYear: int`<br>`genre: string`<br>`isbn: string`<br>`totalCopies: int`<br>`availableCopies: int` | Книга в фонде. Инвариант: `0 <= availableCopies <= totalCopies`. Выдача возможна только при `availableCopies > 0`. |
-| **`Author`** | `id: int`<br>`fullName: string`<br>`country: string`<br>`birthDate: DateTime`<br>`bio: string` | Автор произведений. Связан отношением «один-ко-многим» с сущностью `Book`. |
-| **`Reader`** | `id: int`<br>`fullName: string`<br>`libraryCardNumber: string`<br>`phone: string`<br>`email: string` | Читатель библиотеки. Уникальный номер читательского билета. |
-| **`BookLoan`** | `id: int`<br>`book: Book`<br>`reader: Reader`<br>`issueDate: DateTime`<br>`dueDate: DateTime`<br>`returnDate: ?DateTime`<br>`status: LoanStatus` | Запись о выдаче книги. Статусы: `ACTIVE`, `RETURNED`, `OVERDUE`. При закрытии записи фиксируется `returnDate`. |
+| **Presentation** | `BookController`, `ReaderController`, `LoanController` | Прием HTTP-запросов, вызов сервисов, возврат ответа |
+| **Application** | `BookService`, `ReaderService`, `LoanService` | Управление операциями выдачи, возврата, поиска и регистрации |
+| **Business** | `Book`, `Author`, `Reader`, `BookLoan`, интерфейсы `IBookRepository`, `IReaderRepository`, `IBookLoanRepository`, `IAuthorRepository` | Данные сущностей, проверка доступности экземпляра, интерфейсы |
+| **Data Access (DAL)** | `SqlBookRepository`, `SqlReaderRepository`, `SqlBookLoanRepository`, `SqlAuthorRepository`, `DatabaseConnection` | Выполнение SQL-запросов (SELECT, INSERT, UPDATE) к базе данных |
 
 ---
 
-## 4. Обязательные бизнес-операции и их распределение
+## 4. Сущности системы
 
-1. **Добавление книги**: `BookController` -> `BookCatalogService.addBook(CreateBookDTO)` -> `IBookRepository.save(Book)`.
-2. **Регистрация читателя**: `ReaderController` -> `ReaderManagementService.registerReader(RegisterReaderDTO)` -> `IReaderRepository.save(Reader)`.
-3. **Поиск книги**: `BookController` -> `BookCatalogService.searchBooks(BookSearchFilterDTO)` -> `IBookRepository.findByCriteria(...)`.
-4. **Выдача книги**: `LoanController` -> `LoanProcessingService.issueBook(IssueBookDTO)` -> `Book.decrementAvailableCopies()` -> `IBookLoanRepository.save(BookLoan)`.
-5. **Возврат книги**: `LoanController` -> `LoanProcessingService.returnBook(ReturnBookDTO)` -> `BookLoan.close()` -> `Book.incrementAvailableCopies()` -> `IBookRepository.update()`.
-6. **Проверка доступности книги**: `BookController` -> `BookCatalogService.checkAvailability(bookId)` -> `Book.isAvailable()`.
-7. **Получение списка книг конкретного читателя**: `ReaderController` -> `ReaderManagementService.getReaderActiveLoans(readerId)` -> `IBookLoanRepository.findActiveByReaderId(readerId)`.
-8. **Получение истории выдач**: `LoanController` -> `LoanProcessingService.getLoanHistory(filter)` -> `IBookLoanRepository.findAll(filter)`.
-9. **Получение списка просроченных книг**: `LoanController` -> `LoanProcessingService.getOverdueLoans()` -> `IBookLoanRepository.findOverdueLoans(now)`.
+- **Book (Книга):**
+  - `id`: идентификатор
+  - `title`: название книги
+  - `author`: автор (объект Author)
+  - `publicationYear`: год издания
+  - `genre`: жанр
+  - `isbn`: номер ISBN
+  - `totalCopies`: всего экземпляров в библиотеке
+  - `availableCopies`: количество доступных сейчас экземпляров (не может быть меньше 0)
+- **Author (Автор):**
+  - `id`: идентификатор
+  - `fullName`: ФИО автора
+  - `country`: страна
+  - `birthDate`: дата рождения
+  - `bio`: краткая биография
+- **Reader (Читатель):**
+  - `id`: идентификатор
+  - `fullName`: ФИО читателя
+  - `libraryCardNumber`: номер читательского билета
+  - `phone`: телефон
+  - `email`: электронная почта
+- **BookLoan (Выдача книги):**
+  - `id`: идентификатор записи
+  - `book`: выданная книга
+  - `reader`: читатель
+  - `issueDate`: дата выдачи
+  - `dueDate`: плановая дата возврата
+  - `returnDate`: фактическая дата возврата (null, если книга еще на руках)
+  - `status`: статус (`ACTIVE`, `RETURNED`, `OVERDUE`)
 
 ---
 
-## 5. UML-диаграммы (Mermaid.js)
+## 5. Выполнение 9 обязательных операций
 
-### 5.1. Диаграмма классов (Class Diagram)
+1. **Добавление книги:** `BookController` -> `BookService.addBook()` -> `IBookRepository.save()`.
+2. **Регистрация читателя:** `ReaderController` -> `ReaderService.registerReader()` -> `IReaderRepository.save()`.
+3. **Поиск книги:** `BookController` -> `BookService.searchBooks()` -> `IBookRepository.search()`.
+4. **Выдача книги:** `LoanController` -> `LoanService.issueBook()`:
+   - сервис проверяет доступность через `book.isAvailable()`;
+   - если копий нет, выдается ошибка;
+   - если есть, уменьшается `book.availableCopies`, сохраняется запись в `BookLoan` и обновляется книга в БД.
+5. **Возврат книги:** `LoanController` -> `LoanService.returnBook()` -> закрывается запись выдачи, вызывается `book.increaseAvailableCopies()`, изменения сохраняются в БД.
+6. **Проверка доступности книги:** `BookController` -> `BookService.checkAvailability()` -> `book.isAvailable()`.
+7. **Получение списка книг читателя:** `ReaderController` -> `ReaderService.getReaderActiveLoans()` -> `IBookLoanRepository.findByReaderId()`.
+8. **Получение истории выдач:** `LoanController` -> `LoanService.getLoanHistory()` -> `IBookLoanRepository.findAll()`.
+9. **Получение списка просроченных книг:** `LoanController` -> `LoanService.getOverdueLoans()` -> `IBookLoanRepository.findOverdue()`.
+
+---
+
+## 6. UML-диаграммы
+
+### 6.1. Диаграмма классов (Class Diagram)
 
 ```mermaid
 classDiagram
     direction TB
 
-    %% Presentation Layer
+    %% 1. Presentation Layer
     class BookController {
-        -BookCatalogService bookCatalogService
-        +addBook(Request request) JsonResponse
-        +searchBooks(Request request) JsonResponse
-        +checkAvailability(int bookId) JsonResponse
+        -BookService bookService
+        +addBook(request)
+        +searchBooks(request)
+        +checkAvailability(bookId)
     }
 
     class ReaderController {
-        -ReaderManagementService readerService
-        +registerReader(Request request) JsonResponse
-        +getReaderLoans(int readerId) JsonResponse
+        -ReaderService readerService
+        +registerReader(request)
+        +getReaderBooks(readerId)
     }
 
     class LoanController {
-        -LoanProcessingService loanService
-        +issueBook(Request request) JsonResponse
-        +returnBook(Request request) JsonResponse
-        +getOverdueLoans() JsonResponse
-        +getLoanHistory(Request request) JsonResponse
+        -LoanService loanService
+        +issueBook(request)
+        +returnBook(request)
+        +getOverdueLoans()
+        +getLoanHistory()
     }
 
-    %% Application Layer
-    class BookCatalogService {
+    %% 2. Application Layer
+    class BookService {
         -IBookRepository bookRepo
         -IAuthorRepository authorRepo
-        +addBook(CreateBookDTO dto) BookResponseDTO
-        +searchBooks(BookSearchFilterDTO filter) List~BookResponseDTO~
-        +checkAvailability(int bookId) bool
+        +addBook(title, authorId, year, genre, isbn, totalCopies) Book
+        +searchBooks(query) List~Book~
+        +checkAvailability(bookId) bool
     }
 
-    class ReaderManagementService {
+    class ReaderService {
         -IReaderRepository readerRepo
         -IBookLoanRepository loanRepo
-        +registerReader(RegisterReaderDTO dto) ReaderResponseDTO
-        +getReaderActiveLoans(int readerId) List~LoanResponseDTO~
+        +registerReader(fullName, cardNumber, phone, email) Reader
+        +getReaderActiveLoans(readerId) List~BookLoan~
     }
 
-    class LoanProcessingService {
+    class LoanService {
         -IBookLoanRepository loanRepo
         -IBookRepository bookRepo
         -IReaderRepository readerRepo
-        -IDatabaseTransactionManager txManager
-        +issueBook(IssueBookDTO dto) LoanResponseDTO
-        +returnBook(ReturnBookDTO dto) LoanResponseDTO
-        +getOverdueLoans() List~LoanResponseDTO~
-        +getLoanHistory(LoanHistoryFilterDTO filter) List~LoanResponseDTO~
+        +issueBook(bookId, readerId, days) BookLoan
+        +returnBook(loanId) BookLoan
+        +getOverdueLoans() List~BookLoan~
+        +getLoanHistory() List~BookLoan~
     }
 
-    class IssueBookDTO {
-        +int bookId
-        +int readerId
-        +int loanDurationDays
-    }
-
-    class ReturnBookDTO {
-        +int loanId
-        +DateTime returnDate
-    }
-
-    class CreateBookDTO {
+    %% 3. Business Layer (Domain)
+    class Book {
+        +int id
         +string title
-        +int authorId
+        +Author author
         +int publicationYear
         +string genre
         +string isbn
         +int totalCopies
+        +int availableCopies
+        +isAvailable() bool
+        +decreaseAvailableCopies() void
+        +increaseAvailableCopies() void
     }
 
-    class RegisterReaderDTO {
+    class Author {
+        +int id
+        +string fullName
+        +string country
+        +string birthDate
+        +string bio
+    }
+
+    class Reader {
+        +int id
         +string fullName
         +string libraryCardNumber
         +string phone
         +string email
     }
 
-    %% Business Layer
-    class Book {
-        -int id
-        -string title
-        -Author author
-        -int publicationYear
-        -string genre
-        -string isbn
-        -int totalCopies
-        -int availableCopies
-        +isAvailable() bool
-        +decrementAvailableCopies() void
-        +incrementAvailableCopies() void
-        +getId() int
-        +getTitle() string
-        +getAvailableCopies() int
-        +getTotalCopies() int
-    }
-
-    class Author {
-        -int id
-        -string fullName
-        -string country
-        -DateTime birthDate
-        -string bio
-        +getId() int
-        +getFullName() string
-    }
-
-    class Reader {
-        -int id
-        -string fullName
-        -string libraryCardNumber
-        -string phone
-        -string email
-        +getId() int
-        +getLibraryCardNumber() string
-        +canBorrow() bool
-    }
-
     class BookLoan {
-        -int id
-        -Book book
-        -Reader reader
-        -DateTime issueDate
-        -DateTime dueDate
-        -DateTime returnDate
-        -LoanStatus status
-        +close(DateTime actualReturnDate) void
-        +isOverdue(DateTime currentDate) bool
-        +getId() int
-        +getStatus() LoanStatus
-        +getDueDate() DateTime
-    }
-
-    class LoanStatus {
-        <<enumeration>>
-        ACTIVE
-        RETURNED
-        OVERDUE
+        +int id
+        +Book book
+        +Reader reader
+        +string issueDate
+        +string dueDate
+        +string returnDate
+        +string status
+        +closeLoan(returnDate) void
+        +checkIsOverdue() bool
     }
 
     class IBookRepository {
         <<interface>>
-        +save(Book book) Book
+        +save(Book book) void
         +findById(int id) Book
         +findByIsbn(string isbn) Book
-        +findByCriteria(BookSearchFilterDTO filter) List~Book~
+        +search(string query) List~Book~
         +update(Book book) void
     }
 
     class IAuthorRepository {
         <<interface>>
-        +save(Author author) Author
+        +save(Author author) void
         +findById(int id) Author
     }
 
     class IReaderRepository {
         <<interface>>
-        +save(Reader reader) Reader
+        +save(Reader reader) void
         +findById(int id) Reader
-        +findByCardNumber(string cardNumber) Reader
     }
 
     class IBookLoanRepository {
         <<interface>>
-        +save(BookLoan loan) BookLoan
+        +save(BookLoan loan) void
         +findById(int id) BookLoan
         +update(BookLoan loan) void
-        +findActiveByReaderId(int readerId) List~BookLoan~
-        +findOverdueLoans(DateTime currentDate) List~BookLoan~
-        +findAll(LoanHistoryFilterDTO filter) List~BookLoan~
+        +findByReaderId(int readerId) List~BookLoan~
+        +findOverdue() List~BookLoan~
+        +findAll() List~BookLoan~
     }
 
-    class IDatabaseTransactionManager {
-        <<interface>>
-        +beginTransaction() void
-        +commit() void
-        +rollback() void
-    }
-
-    %% Data Access Layer
-    class DatabaseContext {
-        -Connection connection
-        +execute(string sql, array params) Result
-        +beginTransaction() void
-        +commit() void
-        +rollback() void
+    %% 4. Data Access Layer (DAL)
+    class DatabaseConnection {
+        -string connectionString
+        +query(sql, params)
+        +execute(sql, params)
     }
 
     class SqlBookRepository {
-        -DatabaseContext db
-        +save(Book book) Book
+        -DatabaseConnection db
+        +save(Book book) void
         +findById(int id) Book
         +findByIsbn(string isbn) Book
-        +findByCriteria(BookSearchFilterDTO filter) List~Book~
+        +search(string query) List~Book~
         +update(Book book) void
     }
 
     class SqlAuthorRepository {
-        -DatabaseContext db
-        +save(Author author) Author
+        -DatabaseConnection db
+        +save(Author author) void
         +findById(int id) Author
     }
 
     class SqlReaderRepository {
-        -DatabaseContext db
-        +save(Reader reader) Reader
+        -DatabaseConnection db
+        +save(Reader reader) void
         +findById(int id) Reader
-        +findByCardNumber(string cardNumber) Reader
     }
 
     class SqlBookLoanRepository {
-        -DatabaseContext db
-        +save(BookLoan loan) BookLoan
+        -DatabaseConnection db
+        +save(BookLoan loan) void
         +findById(int id) BookLoan
         +update(BookLoan loan) void
-        +findActiveByReaderId(int readerId) List~BookLoan~
-        +findOverdueLoans(DateTime currentDate) List~BookLoan~
-        +findAll(LoanHistoryFilterDTO filter) List~BookLoan~
+        +findByReaderId(int readerId) List~BookLoan~
+        +findOverdue() List~BookLoan~
+        +findAll() List~BookLoan~
     }
 
-    %% Dependencies
-    BookController --> BookCatalogService
-    ReaderController --> ReaderManagementService
-    LoanController --> LoanProcessingService
+    %% Links
+    BookController --> BookService
+    ReaderController --> ReaderService
+    LoanController --> LoanService
 
-    BookCatalogService ..> IBookRepository
-    BookCatalogService ..> IAuthorRepository
-    ReaderManagementService ..> IReaderRepository
-    ReaderManagementService ..> IBookLoanRepository
-    LoanProcessingService ..> IBookLoanRepository
-    LoanProcessingService ..> IBookRepository
-    LoanProcessingService ..> IReaderRepository
-    LoanProcessingService ..> IDatabaseTransactionManager
-
-    LoanProcessingService ..> IssueBookDTO
-    LoanProcessingService ..> ReturnBookDTO
+    BookService ..> IBookRepository
+    BookService ..> IAuthorRepository
+    ReaderService ..> IReaderRepository
+    ReaderService ..> IBookLoanRepository
+    LoanService ..> IBookLoanRepository
+    LoanService ..> IBookRepository
+    LoanService ..> IReaderRepository
 
     Book "0..*" o-- "1" Author
     BookLoan "0..*" --> "1" Book
     BookLoan "0..*" --> "1" Reader
-    BookLoan --> LoanStatus
 
     SqlBookRepository ..|> IBookRepository
     SqlAuthorRepository ..|> IAuthorRepository
     SqlReaderRepository ..|> IReaderRepository
     SqlBookLoanRepository ..|> IBookLoanRepository
-    DatabaseContext ..|> IDatabaseTransactionManager
 
-    SqlBookRepository --> DatabaseContext
-    SqlAuthorRepository --> DatabaseContext
-    SqlReaderRepository --> DatabaseContext
-    SqlBookLoanRepository --> DatabaseContext
+    SqlBookRepository --> DatabaseConnection
+    SqlAuthorRepository --> DatabaseConnection
+    SqlReaderRepository --> DatabaseConnection
+    SqlBookLoanRepository --> DatabaseConnection
 ```
 
 ---
 
-### 5.2. Диаграмма последовательности: Выдача книги (Sequence Diagram)
+### 6.2. Диаграмма последовательности: Выдача книги (Sequence Diagram)
 
 ```mermaid
 sequenceDiagram
     autonumber
-    actor Librarian as Библиотекарь
+    actor User as Библиотекарь
     participant LC as LoanController (Presentation)
-    participant LPS as LoanProcessingService (Application)
-    participant RR as IReaderRepository (Domain Interface)
-    participant BR as IBookRepository (Domain Interface)
-    participant LR as IBookLoanRepository (Domain Interface)
-    participant B as book: Book (Domain Entity)
-    participant BL as loan: BookLoan (Domain Entity)
-    participant TX as IDatabaseTransactionManager (Infrastructure)
-    participant SBR as SqlBookRepository (DAL)
-    participant SLR as SqlBookLoanRepository (DAL)
+    participant LS as LoanService (Application)
+    participant BR as IBookRepository (DAL)
+    participant LR as IBookLoanRepository (DAL)
+    participant B as Book (Business)
+    participant L as BookLoan (Business)
 
-    Librarian ->> LC: POST /loans {readerId, bookId, loanDurationDays}
-    activate LC
-    LC ->> LC: validate(request)
-    LC ->> LPS: issueBook(IssueBookDTO)
-    activate LPS
+    User ->> LC: Выдать книгу (bookId, readerId, days)
+    LC ->> LS: issueBook(bookId, readerId, days)
+    LS ->> BR: findById(bookId)
+    BR -->> LS: объект book
+    
+    LS ->> B: isAvailable()
+    B -->> LS: true / false (availableCopies > 0)
 
-    LPS ->> RR: findById(readerId)
-    activate RR
-    RR -->> LPS: reader
-    deactivate RR
-
-    LPS ->> BR: findById(bookId)
-    activate BR
-    BR -->> LPS: book
-    deactivate BR
-
-    LPS ->> B: isAvailable()
-    activate B
-    B -->> LPS: bool (availableCopies > 0)
-    deactivate B
-
-    alt Доступных экземпляров НЕТ (availableCopies <= 0)
-        LPS -->> LC: throw BookNotAvailableException("Книга недоступна для выдачи")
-        LC -->> Librarian: HTTP 409 Conflict / Error JSON
-    else Экземпляр ДОСТУПЕН (availableCopies > 0)
-        LPS ->> TX: beginTransaction()
-        activate TX
-
-        LPS ->> B: decrementAvailableCopies()
-        activate B
+    alt Нет доступных копий (availableCopies == 0)
+        LS -->> LC: Ошибка: "Нет свободных экземпляров"
+        LC -->> User: Сообщение об ошибке
+    else Есть свободный экземпляр
+        LS ->> B: decreaseAvailableCopies()
         Note over B: availableCopies = availableCopies - 1
-        B -->> LPS: void
-        deactivate B
-
-        LPS ->> BR: update(book)
-        activate BR
-        BR ->> SBR: update(book)
-        activate SBR
-        Note over SBR: UPDATE books SET available_copies = ... WHERE id = ...
-        SBR -->> BR: success
-        deactivate SBR
-        BR -->> LPS: void
-        deactivate BR
-
-        LPS ->> BL: create(book, reader, issueDate, dueDate, status=ACTIVE)
-        activate BL
-        BL -->> LPS: loan
-        deactivate BL
-
-        LPS ->> LR: save(loan)
-        activate LR
-        LR ->> SLR: save(loan)
-        activate SLR
-        Note over SLR: INSERT INTO book_loans (...) VALUES (...)
-        SLR -->> LR: savedLoan
-        deactivate SLR
-        LR -->> LPS: savedLoan
-        deactivate LR
-
-        LPS ->> TX: commit()
-        deactivate TX
-
-        LPS -->> LC: LoanResponseDTO
-        deactivate LPS
-        LC -->> Librarian: HTTP 201 Created (LoanResponseDTO JSON)
-        deactivate LC
+        
+        LS ->> BR: update(book)
+        Note over BR: UPDATE books SET available_copies = ...
+        
+        LS ->> L: создать BookLoan(...)
+        LS ->> LR: save(newLoan)
+        Note over LR: INSERT INTO book_loans (...)
+        
+        LR -->> LS: сохраненный BookLoan
+        LS -->> LC: BookLoan
+        LC -->> User: "Книга успешно выдана"
     end
 ```
 
 ---
 
-## 6. Технологический стек и проектные соглашения
-
-- **Методология моделирования**: UML 2.5 (Mermaid.js).
-- **Архитектурный шаблон**: 4-Layered Architecture (Presentation -> Application -> Business/Domain <- Data Access).
-- **СУБД (проектируемая)**: Реляционная СУБД (PostgreSQL / MySQL). Все запросы и работа с транзакциями изолированы в `Data Access Layer`.
-- **Контроль версий**: Git Flow с ветками `main` и `dev`, интеграция через Pull Request.
+## 7. Вывод
+В ходе лабораторной работы была спроектирована 4-уровневая архитектура для библиотечной системы. Выделены контроллеры, сервисы приложения, сущности предметной области и репозитории для работы с БД. Все SQL-запросы изолированы в слое DAL, а между слоями используются интерфейсы, что обеспечивает слабую связанность компонентов.

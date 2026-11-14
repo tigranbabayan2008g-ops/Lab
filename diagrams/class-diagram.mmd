@@ -1,0 +1,207 @@
+classDiagram
+    direction TB
+
+    %% Перечисления
+    class LoanStatus {
+        <<enumeration>>
+        ACTIVE
+        RETURNED
+        OVERDUE
+    }
+
+    %% ==========================================
+    %% 1. PRESENTATION LAYER (Слой представления)
+    %% ==========================================
+    class BookController {
+        -BookService bookService
+        +addBook(request)
+        +searchBooks(request)
+        +checkAvailability(int bookId)
+    }
+
+    class ReaderController {
+        -ReaderService readerService
+        +registerReader(request)
+        +getReaderLoans(int readerId)
+    }
+
+    class LoanController {
+        -LoanService loanService
+        +issueBook(request)
+        +returnBook(request)
+        +getOverdueLoans()
+        +getLoanHistory()
+    }
+
+    %% ==========================================
+    %% 2. APPLICATION LAYER (Слой приложения)
+    %% ==========================================
+    class BookService {
+        -IBookRepository bookRepo
+        -IAuthorRepository authorRepo
+        +addBook(title, authorId, year, genre, isbn, totalCopies) Book
+        +searchBooks(query) List~Book~
+        +checkAvailability(int bookId) bool
+    }
+
+    class ReaderService {
+        -IReaderRepository readerRepo
+        -IBookLoanRepository loanRepo
+        +registerReader(fullName, cardNumber, phone, email) Reader
+        +getReaderActiveLoans(int readerId) List~BookLoan~
+    }
+
+    class LoanService {
+        -IBookLoanRepository loanRepo
+        -IBookRepository bookRepo
+        -IReaderRepository readerRepo
+        +issueBook(int bookId, int readerId, int days) BookLoan
+        +returnBook(int loanId) BookLoan
+        +getOverdueLoans() List~BookLoan~
+        +getLoanHistory() List~BookLoan~
+    }
+
+    %% ==========================================
+    %% 3. BUSINESS LAYER (Бизнес-слой / Сущности)
+    %% ==========================================
+    class Book {
+        +int id
+        +string title
+        +Author author
+        +int publicationYear
+        +string genre
+        +string isbn
+        +int totalCopies
+        +int availableCopies
+        +isAvailable() bool
+        +decreaseAvailableCopies() void
+        +increaseAvailableCopies() void
+    }
+
+    class Author {
+        +int id
+        +string fullName
+        +string country
+        +string birthDate
+        +string bio
+    }
+
+    class Reader {
+        +int id
+        +string fullName
+        +string libraryCardNumber
+        +string phone
+        +string email
+    }
+
+    class BookLoan {
+        +int id
+        +Book book
+        +Reader reader
+        +string issueDate
+        +string dueDate
+        +string returnDate
+        +LoanStatus status
+        +closeLoan(string returnDate) void
+        +checkIsOverdue(string currentDate) bool
+    }
+
+    %% Контракты репозиториев (Интерфейсы)
+    class IBookRepository {
+        <<interface>>
+        +save(Book book) void
+        +findById(int id) Book
+        +findByIsbn(string isbn) Book
+        +search(string query) List~Book~
+        +update(Book book) void
+    }
+
+    class IAuthorRepository {
+        <<interface>>
+        +save(Author author) void
+        +findById(int id) Author
+    }
+
+    class IReaderRepository {
+        <<interface>>
+        +save(Reader reader) void
+        +findById(int id) Reader
+    }
+
+    class IBookLoanRepository {
+        <<interface>>
+        +save(BookLoan loan) void
+        +findById(int id) BookLoan
+        +update(BookLoan loan) void
+        +findByReaderId(int readerId) List~BookLoan~
+        +findOverdue() List~BookLoan~
+        +findAll() List~BookLoan~
+    }
+
+    %% ==========================================
+    %% 4. DATA ACCESS LAYER (Слой доступа к БД)
+    %% ==========================================
+    class DatabaseConnection {
+        -string dsn
+        +query(string sql, array params)
+        +execute(string sql, array params)
+    }
+
+    class SqlBookRepository {
+        -DatabaseConnection db
+        +save(Book book) void
+        +findById(int id) Book
+        +findByIsbn(string isbn) Book
+        +search(string query) List~Book~
+        +update(Book book) void
+    }
+
+    class SqlAuthorRepository {
+        -DatabaseConnection db
+        +save(Author author) void
+        +findById(int id) Author
+    }
+
+    class SqlReaderRepository {
+        -DatabaseConnection db
+        +save(Reader reader) void
+        +findById(int id) Reader
+    }
+
+    class SqlBookLoanRepository {
+        -DatabaseConnection db
+        +save(BookLoan loan) void
+        +findById(int id) BookLoan
+        +update(BookLoan loan) void
+        +findByReaderId(int readerId) List~BookLoan~
+        +findOverdue() List~BookLoan~
+        +findAll() List~BookLoan~
+    }
+
+    %% Связи между компонентами
+    BookController --> BookService
+    ReaderController --> ReaderService
+    LoanController --> LoanService
+
+    BookService ..> IBookRepository
+    BookService ..> IAuthorRepository
+    ReaderService ..> IReaderRepository
+    ReaderService ..> IBookLoanRepository
+    LoanService ..> IBookLoanRepository
+    LoanService ..> IBookRepository
+    LoanService ..> IReaderRepository
+
+    Book "0..*" o-- "1" Author : написана
+    BookLoan "0..*" --> "1" Book : выдаваемая книга
+    BookLoan "0..*" --> "1" Reader : читатель
+    BookLoan --> LoanStatus
+
+    SqlBookRepository ..|> IBookRepository
+    SqlAuthorRepository ..|> IAuthorRepository
+    SqlReaderRepository ..|> IReaderRepository
+    SqlBookLoanRepository ..|> IBookLoanRepository
+
+    SqlBookRepository --> DatabaseConnection
+    SqlAuthorRepository --> DatabaseConnection
+    SqlReaderRepository --> DatabaseConnection
+    SqlBookLoanRepository --> DatabaseConnection

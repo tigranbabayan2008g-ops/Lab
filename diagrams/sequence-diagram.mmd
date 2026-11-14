@@ -1,0 +1,66 @@
+sequenceDiagram
+    autonumber
+    actor Librarian as Библиотекарь
+    participant LC as LoanController (Presentation)
+    participant LS as LoanService (Application)
+    participant BR as IBookRepository (Business/DAL)
+    participant RR as IReaderRepository (Business/DAL)
+    participant LR as IBookLoanRepository (Business/DAL)
+    participant B as Book (Business)
+    participant L as BookLoan (Business)
+    participant DB as DatabaseConnection (DAL)
+
+    %% 1. Запрос на выдачу книги
+    Librarian->>LC: Запрос на выдачу книги (bookId, readerId, days)
+    activate LC
+    LC->>LS: issueBook(bookId, readerId, days)
+    activate LS
+
+    %% 2. Проверка читателя и книги
+    LS->>RR: findById(readerId)
+    RR-->>LS: Reader
+    LS->>BR: findById(bookId)
+    BR-->>LS: Book
+
+    %% 3. Проверка доступности экземпляров
+    LS->>B: isAvailable()
+    activate B
+    B-->>LS: bool (availableCopies > 0)
+    deactivate B
+
+    alt Нет доступных экземпляров (availableCopies <= 0)
+        LS-->>LC: Ошибка: "Книга отсутствует в наличии"
+        LC-->>Librarian: Сообщение: "Книга временно недоступна для выдачи"
+    else Экземпляр есть в наличии
+        %% 4. Уменьшение доступных копий
+        LS->>B: decreaseAvailableCopies()
+        activate B
+        Note over B: availableCopies = availableCopies - 1
+        deactivate B
+
+        %% 5. Обновление книги в БД
+        LS->>BR: update(book)
+        activate BR
+        BR->>DB: execute("UPDATE books SET available_copies = ... WHERE id = ...")
+        DB-->>BR: OK
+        BR-->>LS: void
+        deactivate BR
+
+        %% 6. Создание и сохранение записи о выдаче
+        LS->>L: new BookLoan(book, reader, issueDate, dueDate, ACTIVE)
+        activate L
+        L-->>LS: loanInstance
+        deactivate L
+
+        LS->>LR: save(loanInstance)
+        activate LR
+        LR->>DB: execute("INSERT INTO book_loans (...) VALUES (...)")
+        DB-->>LR: newId
+        LR-->>LS: savedLoan
+        deactivate LR
+
+        LS-->>LC: BookLoan (Успех)
+        deactivate LS
+        LC-->>Librarian: Подтверждение: "Книга успешно выдана читателю"
+        deactivate LC
+    end

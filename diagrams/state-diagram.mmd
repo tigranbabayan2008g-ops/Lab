@@ -1,0 +1,20 @@
+stateDiagram-v2
+    [*] --> ACTIVE : Выдача книги читателю (issueBook)
+    
+    state ACTIVE {
+        [*] --> OnHands : Книга находится на руках
+        OnHands --> CheckDueDate : Ежедневный контроль срока
+        CheckDueDate --> OnHands : Срок не истек (сегодня <= dueDate)
+    }
+
+    ACTIVE --> RETURNED : Возврат книги до истечения срока (returnBook)
+    ACTIVE --> OVERDUE : Истек срок возврата (сегодня > dueDate)
+    
+    state OVERDUE {
+        [*] --> InDebt : Формирование задолженности
+        InDebt --> NotifyReader : Уведомление читателя о просрочке
+    }
+
+    OVERDUE --> RETURNED : Фактический возврат просроченной книги
+    
+    RETURNED --> [*] : Запись закрыта (returnDate зафиксирована, availableCopies восстановлен)
